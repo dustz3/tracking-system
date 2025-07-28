@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airtable API 網頁</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .api-config {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .data-display {
+            margin-top: 30px;
+        }
+        .record {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .debug-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .help-section {
+            background-color: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .help-section h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Airtable API 網頁</h1>
+        
+        <div class="help-section">
+            <h3>🔧 故障排除指南</h3>
+            <p><strong>403 錯誤解決方法：</strong></p>
+            <ol>
+                <li>確認 API Key 是否正確（從 Airtable → Account → API 獲取）</li>
+                <li>確認 Base ID 是否正確（從 Airtable 網址中複製）</li>
+                <li>確認表格名稱是否正確（使用表格的實際名稱）</li>
+                <li>確認您的 Airtable 帳戶有權限訪問該 Base</li>
+            </ol>
+        </div>
+        
+        <div class="api-config">
+            <h3>API 設定</h3>
+            <div class="form-group">
+                <label for="apiKey">Airtable API Key:</label>
+                <input type="password" id="apiKey" placeholder="輸入您的 Airtable API Key">
+            </div>
+            <div class="form-group">
+                <label for="baseId">Base ID:</label>
+                <input type="text" id="baseId" placeholder="輸入您的 Base ID">
+            </div>
+            <div class="form-group">
+                <label for="tableName">Table Name:</label>
+                <input type="text" id="tableName" placeholder="輸入表格名稱">
+            </div>
+            <button onclick="testConnection()">測試連接</button>
+            <button onclick="loadData()">載入數據</button>
+            <button onclick="clearData()">清除數據</button>
+        </div>
+
+        <div id="message"></div>
+        <div id="debugInfo"></div>
+        <div id="dataDisplay" class="data-display"></div>
+    </div>
+
+    <script>
+        // 顯示訊息函數
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+
+        // 清除訊息
+        function clearMessage() {
+            document.getElementById('message').innerHTML = '';
+            document.getElementById('debugInfo').innerHTML = '';
+        }
+
+        // 測試 API 連接
+        async function testConnection() {
+            const apiKey = document.getElementById('apiKey').value;
+            const baseId = document.getElementById('baseId').value;
+            const tableName = document.getElementById('tableName').value;
+
+            if (!apiKey || !baseId || !tableName) {
+                showMessage('請填寫所有必要的 API 資訊', 'error');
+                return;
+            }
+
+            // 驗證 API Key 格式
+            if (!apiKey.startsWith('pat_') && !apiKey.startsWith('patn')) {
+                showMessage('API Key 格式錯誤！正確的 API Key 應該以 "pat_" 或 "patn" 開頭', 'error');
+                return;
+            }
+
+            if (apiKey.length < 20) {
+                showMessage('API Key 長度不足！請確認是否完整複製', 'error');
+                return;
+            }
+
+            clearMessage();
+            showMessage('正在測試連接...', 'info');
+
+            try {
+                // 首先測試 Base 是否可訪問
+                const baseUrl = `https://api.airtable.com/v0/meta/bases/${baseId}/tables`;
+                const baseResponse = await fetch(baseUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                let debugInfo = `<div class="debug-info">
+                    <h4>調試資訊：</h4>
+                    <p><strong>Base ID:</strong> ${baseId}</p>
+                    <p><strong>Table Name:</strong> ${tableName}</p>
+                    <p><strong>API Key 格式:</strong> ${apiKey.startsWith('pat_') || apiKey.startsWith('patn') ? '✅ 正確' : '❌ 錯誤'}</p>
+                    <p><strong>API Key 長度:</strong> ${apiKey.length} 字符</p>
+                    <p><strong>Base 測試狀態:</strong> ${baseResponse.status} ${baseResponse.statusText}</p>
+                `;
+
+                if (baseResponse.status === 401) {
+                    throw new Error('API Key 無效！請檢查：1) API Key 是否正確複製 2) 是否為最新的 API Key 3) 是否有權限訪問該 Base');
+                }
+
+                if (!baseResponse.ok) {
+                    throw new Error(`Base 測試失敗: ${baseResponse.status} ${baseResponse.statusText}`);
+                }
+
+                const baseData = await baseResponse.json();
+                debugInfo += `<p><strong>Base 中的表格:</strong> ${baseData.tables.map(t => t.name).join(', ')}</p>`;
+
+                // 測試特定表格
+                const tableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}?maxRecords=1`;
+                const tableResponse = await fetch(tableUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                debugInfo += `<p><strong>表格測試狀態:</strong> ${tableResponse.status} ${tableResponse.statusText}</p>`;
+
+                if (tableResponse.status === 401) {
+                    throw new Error('API Key 無效！請重新生成 API Key');
+                }
+
+                if (!tableResponse.ok) {
+                    throw new Error(`表格測試失敗: ${tableResponse.status} ${tableResponse.statusText}`);
+                }
+
+                const tableData = await tableResponse.json();
+                debugInfo += `<p><strong>表格記錄數:</strong> ${tableData.records.length}</p>`;
+
+                document.getElementById('debugInfo').innerHTML = debugInfo;
+                showMessage('連接測試成功！API 設定正確。', 'success');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`連接測試失敗: ${error.message}`, 'error');
+                
+                // 提供具體的錯誤建議
+                let suggestion = '';
+                if (error.message.includes('401')) {
+                    suggestion = `
+                        <strong>401 錯誤解決步驟：</strong><br>
+                        1. 前往 Airtable → Account → API<br>
+                        2. 點擊 "Generate API key" 生成新的 API Key<br>
+                        3. 完整複製新生成的 API Key（以 pat_ 開頭）<br>
+                        4. 確保您有權限訪問該 Base
+                    `;
+                } else if (error.message.includes('403')) {
+                    suggestion = '建議檢查 API Key 是否正確，以及是否有權限訪問該 Base。';
+                } else if (error.message.includes('404')) {
+                    suggestion = '建議檢查 Base ID 或表格名稱是否正確。';
+                }
+                
+                if (suggestion) {
+                    showMessage(suggestion, 'info');
+                }
+            }
+        }
+
+        // 載入 Airtable 數據
+        async function loadData() {
+            const apiKey = document.getElementById('apiKey').value;
+            const baseId = document.getElementById('baseId').value;
+            const tableName = document.getElementById('tableName').value;
+
+            if (!apiKey || !baseId || !tableName) {
+                showMessage('請填寫所有必要的 API 資訊', 'error');
+                return;
+            }
+
+            clearMessage();
+            const dataDisplay = document.getElementById('dataDisplay');
+            dataDisplay.innerHTML = '<div class="loading">載入中...</div>';
+
+            try {
+                const response = await fetch(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                displayData(data.records);
+                showMessage(`成功載入 ${data.records.length} 筆記錄`, 'success');
+
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`載入失敗: ${error.message}`, 'error');
+                dataDisplay.innerHTML = '';
+            }
+        }
+
+        // 顯示數據
+        function displayData(records) {
+            const dataDisplay = document.getElementById('dataDisplay');
+            
+            if (records.length === 0) {
+                dataDisplay.innerHTML = '<p>沒有找到任何記錄</p>';
+                return;
+            }
+
+            let html = '<h3>數據記錄</h3>';
+            
+            records.forEach((record, index) => {
+                html += '<div class="record">';
+                html += `<h4>記錄 ${index + 1} (ID: ${record.id})</h4>`;
+                
+                if (record.fields) {
+                    Object.keys(record.fields).forEach(key => {
+                        const value = record.fields[key];
+                        html += `<p><strong>${key}:</strong> ${value}</p>`;
+                    });
+                }
+                
+                html += '</div>';
+            });
+
+            dataDisplay.innerHTML = html;
+        }
+
+        // 清除數據
+        function clearData() {
+            document.getElementById('dataDisplay').innerHTML = '';
+            clearMessage();
+        }
+
+        // 頁面載入時的說明
+        window.onload = function() {
+            showMessage('請先點擊「測試連接」按鈕來驗證您的 API 設定是否正確', 'info');
+        };
+    </script>
+</body>
+</html> 

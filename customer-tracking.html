@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貨運追蹤查詢</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+        }
+        .search-section {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .search-box {
+            display: flex;
+            max-width: 500px;
+            margin: 0 auto 20px;
+            gap: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 20px;
+            border: none;
+            font-size: 18px;
+            outline: none;
+            background-color: #f8f9fa;
+        }
+        input[type="text"]:focus {
+            background-color: white;
+        }
+        button {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            padding: 20px 30px;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.4);
+        }
+        .result-section {
+            margin-top: 40px;
+        }
+        .shipment-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px;
+            margin-bottom: 25px;
+            border-radius: 15px;
+            border-left: 8px solid #007bff;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .shipment-card:hover {
+            transform: translateY(-5px);
+        }
+        .shipment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .tracking-id {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .status {
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .status.delivered {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+        }
+        .status.in-transit {
+            background: linear-gradient(45deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        .status.pending {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+        }
+        .status.error {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+        }
+        .shipment-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .detail-item {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #6c757d;
+            margin-bottom: 8px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .detail-value {
+            color: #2c3e50;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        .no-result {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+            font-size: 20px;
+            background-color: #f8f9fa;
+            border-radius: 15px;
+            border: 2px dashed #dee2e6;
+        }
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #007bff;
+            font-size: 18px;
+        }
+        .error {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .success {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .info {
+            background: linear-gradient(45deg, #17a2b8, #138496);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚚 貨運追蹤查詢</h1>
+        
+        <div class="search-section">
+            <h2>🔍 請輸入您的追蹤編號</h2>
+            <p>輸入您的 Tracking ID 來查詢貨運狀態</p>
+            
+            <div class="search-box">
+                <input type="text" id="trackingInput" placeholder="請輸入 Tracking ID" onkeypress="handleKeyPress(event)">
+                <button onclick="searchTracking()">查詢</button>
+            </div>
+        </div>
+
+        <div id="message"></div>
+        <div id="results" class="result-section"></div>
+    </div>
+
+    <script>
+        // API 設定（隱藏在程式碼中）
+        const API_KEY = 'patnJQd1eoNDR8yOF.98fd34bfb806a4dc8dbd68eb3b72598ef7cf5d7531ff2c29c163c304902ebf41';
+        const BASE_ID = 'appznhirfyiLbdpJJ';
+
+        // 顯示訊息
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+
+        // 清除訊息
+        function clearMessage() {
+            document.getElementById('message').innerHTML = '';
+        }
+
+        // 處理按鍵事件
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                searchTracking();
+            }
+        }
+
+        // 搜尋 Tracking ID
+        async function searchTracking() {
+            const trackingId = document.getElementById('trackingInput').value.trim();
+
+            if (!trackingId) {
+                showMessage('請輸入 Tracking ID', 'error');
+                return;
+            }
+
+            clearMessage();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div>正在查詢您的貨運狀態...</div>';
+
+            try {
+                // 直接查詢 Shipments 表格，不使用篩選
+                const response = await fetch(`https://api.airtable.com/v0/${BASE_ID}/Shipments`, {
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.status === 401) {
+                    throw new Error('API Key 無效！請檢查 API Key 是否正確');
+                }
+
+                if (response.status === 403) {
+                    throw new Error('權限不足！請檢查 API Key 權限');
+                }
+
+                if (!response.ok) {
+                    throw new Error(`查詢失敗: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                // 在客戶端篩選 Tracking ID
+                const matchingRecords = data.records.filter(record => {
+                    const fields = record.fields;
+                    return fields['Tracking ID'] === trackingId;
+                });
+                
+                if (matchingRecords.length === 0) {
+                    resultsDiv.innerHTML = '<div class="no-result">❌ 找不到此 Tracking ID 的貨運記錄<br><br>請確認您的追蹤編號是否正確</div>';
+                } else {
+                    displayShipments(matchingRecords);
+                    showMessage(`✅ 找到 ${matchingRecords.length} 筆貨運記錄`, 'success');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`❌ 查詢失敗: ${error.message}`, 'error');
+                resultsDiv.innerHTML = '';
+            }
+        }
+
+        // 顯示貨運記錄
+        function displayShipments(records) {
+            const resultsDiv = document.getElementById('results');
+            
+            let html = '<h3>📦 您的貨運資訊</h3>';
+            
+            records.forEach((record, index) => {
+                const fields = record.fields;
+                const trackingId = fields['Tracking ID'] || '無 Tracking ID';
+                const customer = fields['所屬客戶'] || '未知客戶';
+                const shipDate = fields['出貨日期'] || '未知日期';
+                const deliveryStatus = fields['配送狀態'] || '未知狀態';
+                const currentLocation = fields['當前位置'] || '未知位置';
+
+                // 根據狀態設定 CSS 類別
+                let statusClass = 'status pending';
+                if (deliveryStatus === '已完成' || deliveryStatus.toLowerCase().includes('completed')) {
+                    statusClass = 'status delivered';
+                } else if (deliveryStatus === '運送中' || deliveryStatus.toLowerCase().includes('transit')) {
+                    statusClass = 'status in-transit';
+                } else if (deliveryStatus === '異常') {
+                    statusClass = 'status error';
+                }
+
+                html += `
+                    <div class="shipment-card">
+                        <div class="shipment-header">
+                            <div class="tracking-id">${trackingId}</div>
+                            <div class="${statusClass}">${deliveryStatus}</div>
+                        </div>
+                        <div class="shipment-details">
+                            <div class="detail-item">
+                                <div class="detail-label">所屬客戶</div>
+                                <div class="detail-value">${customer}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">出貨日期</div>
+                                <div class="detail-value">${shipDate}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">當前位置</div>
+                                <div class="detail-value">${currentLocation}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">配送狀態</div>
+                                <div class="detail-value">${deliveryStatus}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // 頁面載入時的說明
+        window.onload = function() {
+            showMessage('歡迎使用貨運追蹤查詢系統', 'info');
+        };
+    </script>
+</body>
+</html> 
