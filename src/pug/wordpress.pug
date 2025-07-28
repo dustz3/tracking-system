@@ -1,0 +1,741 @@
+doctype html
+html(lang="zh-TW")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title 貨運追蹤查詢
+    style.
+      /* 主要樣式檔案 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: #15151c;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        padding: 40px;
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+      }
+
+      .header {
+        margin-bottom: 30px;
+      }
+
+      .header h1 {
+        font-size: 2.5em;
+        color: #ffffff;
+        margin-bottom: 10px;
+      }
+
+      /* 搜尋區域 */
+      .search-section {
+        margin-bottom: 30px;
+      }
+
+      .search-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+        color: #e0e0e0;
+      }
+
+      .search-label::before {
+        content: '🔍';
+        margin-right: 10px;
+        font-size: 1.5em;
+      }
+
+      .search-hint {
+        font-size: 0.9em;
+        color: #b0b0b0;
+        margin-bottom: 20px;
+      }
+
+      .search-input {
+        width: 100%;
+        padding: 15px 20px;
+        border: 2px solid #2a2a35;
+        border-radius: 10px;
+        font-size: 1.1em;
+        margin-bottom: 20px;
+        transition: border-color 0.3s ease;
+        color: #ffffff;
+        background-color: #2a2a35;
+      }
+
+      .search-input::placeholder {
+        color: #888888;
+      }
+
+      .search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        color: #ffffff;
+        background-color: #2a2a35;
+      }
+
+      .search-button {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+        margin-top: 20px;
+        margin-bottom: 10px;
+      }
+
+      .search-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      .clear-button {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+        color: white;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 10px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 100%;
+        margin-top: 10px;
+        margin-bottom: 10px;
+      }
+
+      .clear-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(255, 107, 107, 0.4);
+      }
+
+      /* 貨運卡片 */
+      .shipment-card {
+        background: #2a2a35;
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+
+      /* 追蹤號碼 */
+      .tracking-id {
+        font-size: 1.3em;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #3a3a45;
+      }
+
+      /* 貨運詳情 */
+      .shipment-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+
+      .detail-item {
+        margin-bottom: 10px;
+        text-align: left;
+      }
+
+      .detail-label {
+        font-weight: bold;
+        color: #b0b0b0;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+        text-align: left;
+      }
+
+      .detail-value {
+        color: #ffffff;
+        font-size: 1em;
+        word-break: break-word;
+        text-align: left;
+      }
+
+      /* 附件樣式 */
+      .attachment-item {
+        margin: 10px 0;
+        display: inline-block;
+        margin-right: 15px;
+      }
+
+      .attachment-image {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        border: 2px solid #3a3a45;
+        flex-shrink: 0;
+      }
+
+      .attachment-image:hover {
+        transform: scale(1.05);
+        border-color: #667eea;
+      }
+
+      .attachment-link {
+        display: inline-block;
+        padding: 8px 15px;
+        background: #3a3a45;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 5px;
+        font-size: 0.9em;
+        transition: background-color 0.3s ease;
+      }
+
+      .attachment-link:hover {
+        background: #667eea;
+      }
+
+      /* 圖片 Modal 樣式 */
+      .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(2px);
+      }
+
+      .image-modal-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      .image-modal img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      }
+
+      .image-modal-close {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        color: #ffffff;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        z-index: 1001;
+      }
+
+      .image-modal-close:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.1);
+      }
+
+      /* 狀態樣式 */
+      .status {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+
+      .status.shipped {
+        background: #4caf50;
+        color: white;
+      }
+
+      .status.in-transit {
+        background: #ff9800;
+        color: white;
+      }
+
+      .status.delivered {
+        background: #2196f3;
+        color: white;
+      }
+
+      .status.error {
+        background: #f44336;
+        color: white;
+      }
+
+      /* 訊息樣式 */
+      .message {
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-weight: bold;
+      }
+
+      .success {
+        background: #4caf50;
+        color: white;
+      }
+
+      .error {
+        background: #f44336;
+        color: white;
+      }
+
+      .info {
+        background: #2196f3;
+        color: white;
+      }
+
+      /* 載入狀態 */
+      .loading {
+        text-align: center;
+        color: #ffffff;
+        font-size: 1.1em;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #3a3a45;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 10px;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* 無結果 */
+      .no-result {
+        text-align: center;
+        color: #b0b0b0;
+        padding: 30px;
+      }
+
+      .no-result p {
+        margin-bottom: 10px;
+      }
+
+      /* 響應式設計 */
+      @media (max-width: 768px) {
+        .container {
+          padding: 20px;
+          margin: 10px;
+        }
+
+        .header h1 {
+          font-size: 2em;
+        }
+
+        .shipment-details {
+          grid-template-columns: 1fr;
+        }
+
+        .search-input {
+          font-size: 1em;
+        }
+
+        .search-button {
+          font-size: 1em;
+        }
+      }
+  
+  body
+    .container
+      .header
+        h1 🚚 貨運追蹤查詢
+      
+      // 圖片 Modal
+      #imageModal.image-modal
+        .image-modal-content
+          span.image-modal-close(onclick="closeImageModal()") &times;
+          img#modalImage(src="" alt="附件圖片")
+      
+      .search-section
+        .search-label 請輸入您的追蹤編號
+        .search-hint 輸入您的 Tracking ID 來查詢貨運狀態
+        input#trackingInput.search-input(
+          type="text" 
+          placeholder="例如：AK-24071009" 
+          onkeypress="handleKeyPress(event)"
+        )
+        button.search-button(onclick="searchTracking()") 查詢
+        button.clear-button(onclick="clearAll()") 清除
+      
+      #message
+      #results
+    
+    script.
+      // API 配置
+      const API_CONFIG = {
+        BASE_URL: 'https://tracking-system-f6d5.onrender.com',
+        ENDPOINTS: {
+          SEARCH: '/api/search-tracking',
+          TEST: '/api/test-connection',
+          STATS: '/api/stats',
+          CLEAR_CACHE: '/api/clear-cache',
+        },
+      };
+
+      // 搜尋追蹤號碼
+      async function searchTracking() {
+        const trackingInput = document.getElementById('trackingInput');
+        const trackingId = trackingInput ? trackingInput.value.trim() : '';
+
+        // 驗證輸入
+        const validation = validateTrackingId(trackingId);
+        if (!validation.valid) {
+          showMessage(validation.message, 'error');
+          return;
+        }
+
+        // 清除之前的訊息和結果
+        clearMessage();
+        clearResults();
+
+        // 顯示載入狀態
+        showLoading();
+
+        try {
+          // 呼叫 API
+          const data = await searchTrackingAPI(trackingId);
+
+          // 顯示結果
+          displayShipments(data.records || []);
+
+          if (data.records && data.records.length > 0) {
+            showMessage(
+              `找到 ${data.records.length} 筆記錄`,
+              'success'
+            );
+          } else {
+            showMessage('未找到相關記錄', 'info');
+          }
+        } catch (error) {
+          console.error('搜尋失敗:', error);
+
+          let errorMessage = '查詢失敗，請稍後再試';
+          if (error.message.includes('401')) {
+            errorMessage = 'API 認證失敗，請聯繫管理員';
+          } else if (error.message.includes('404')) {
+            errorMessage = '未找到相關記錄';
+          } else if (error.message.includes('500')) {
+            errorMessage = '伺服器錯誤，請稍後再試';
+          }
+
+          showMessage(errorMessage, 'error');
+          clearResults();
+        }
+      }
+
+      // 清除所有內容
+      function clearAll() {
+        // 清除輸入框
+        const trackingInput = document.getElementById('trackingInput');
+        if (trackingInput) {
+          trackingInput.value = '';
+        }
+        
+        // 清除訊息
+        clearMessage();
+        
+        // 清除結果
+        clearResults();
+      }
+
+      // API 搜尋函數
+      async function searchTrackingAPI(trackingId) {
+        try {
+          const response = await fetch(
+            `${API_CONFIG.BASE_URL}${
+              API_CONFIG.ENDPOINTS.SEARCH
+            }?trackingId=${encodeURIComponent(trackingId)}`
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error('搜尋失敗:', error);
+          throw error;
+        }
+      }
+
+      // 顯示貨運記錄
+      function displayShipments(records) {
+        const resultsDiv = document.getElementById('results');
+        if (!resultsDiv) return;
+
+        if (!records || records.length === 0) {
+          resultsDiv.innerHTML = `
+            <div class="no-result">
+              <p>未找到相關的貨運記錄</p>
+              <p>請確認追蹤號碼是否正確</p>
+            </div>
+          `;
+          return;
+        }
+
+        let html = '';
+
+        records.forEach((record) => {
+          const fields = record.fields;
+          html += `<div class="shipment-card">`;
+
+          // 顯示追蹤號碼
+          if (fields['Tracking ID']) {
+            html += `<div class="tracking-id">Tracking ID: ${fields['Tracking ID']}</div>`;
+          }
+
+          // 顯示所有欄位
+          html += `<div class="shipment-details">`;
+          
+          // 先處理非附件和非備註的欄位
+          Object.keys(fields).forEach((key) => {
+            const value = fields[key];
+            
+            // 跳過附件和備註，稍後處理
+            if (key === '附件／憑證' || key === '備註') {
+              return;
+            }
+            
+            let displayValue = value;
+
+            // 格式化日期
+            if (
+              key.toLowerCase().includes('date') ||
+              key.toLowerCase().includes('time')
+            ) {
+              displayValue = formatDate(value);
+            }
+
+            // 跳過空值
+            if (displayValue === '' || displayValue === null || displayValue === undefined) {
+              return;
+            }
+
+            html += `
+              <div class="detail-item">
+                <div class="detail-label">${key}</div>
+                <div class="detail-value">${displayValue}</div>
+              </div>
+            `;
+          });
+          
+          // 處理備註（移到附件位置）
+          if (fields['備註']) {
+            html += `
+              <div class="detail-item">
+                <div class="detail-label">備註</div>
+                <div class="detail-value">${fields['備註']}</div>
+              </div>
+            `;
+          }
+          
+          // 處理附件（移到備註位置）
+          if (fields['附件／憑證']) {
+            const value = fields['附件／憑證'];
+            let displayValue = '';
+            
+            if (Array.isArray(value) && value.length > 0 && value[0].type) {
+              // 這是 Airtable 的附件欄位
+              value.forEach((attachment, index) => {
+                if (attachment.type && attachment.type.startsWith('image/')) {
+                  // 圖片附件
+                  displayValue += `
+                    <div class="attachment-item">
+                      <img src="${attachment.url}" 
+                           alt="附件 ${index + 1}" 
+                           class="attachment-image"
+                           onclick="openImageModal('${attachment.url}', '${attachment.filename || '附件'}')"
+                           title="點擊查看大圖">
+                    </div>
+                  `;
+                } else {
+                  // 其他類型附件
+                  displayValue += `
+                    <div class="attachment-item">
+                      <a href="${attachment.url}" 
+                         class="attachment-link" 
+                         target="_blank"
+                         title="${attachment.filename || '下載附件'}">
+                        📎 ${attachment.filename || '附件'}
+                      </a>
+                    </div>
+                  `;
+                }
+              });
+            }
+            
+            if (displayValue) {
+              html += `
+                <div class="detail-item">
+                  <div class="detail-label">附件／憑證</div>
+                  <div class="detail-value">${displayValue}</div>
+                </div>
+              `;
+            }
+          }
+          
+          html += `</div>`;
+          html += `</div>`;
+        });
+
+        resultsDiv.innerHTML = html;
+      }
+
+      // 工具函數
+      function showMessage(message, type = 'info') {
+        const messageDiv = document.getElementById('message');
+        if (messageDiv) {
+          messageDiv.innerHTML = `<div class="message ${type}">${message}</div>`;
+        }
+      }
+
+      function clearMessage() {
+        const messageDiv = document.getElementById('message');
+        if (messageDiv) {
+          messageDiv.innerHTML = '';
+        }
+      }
+
+      function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+          const searchButton = document.querySelector('.search-button');
+          if (searchButton) {
+            searchButton.click();
+          }
+        }
+      }
+
+      function formatDate(dateString) {
+        if (!dateString) return '無資料';
+
+        try {
+          const date = new Date(dateString);
+          return date.toLocaleDateString('zh-TW', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+        } catch (error) {
+          return dateString;
+        }
+      }
+
+      function validateTrackingId(trackingId) {
+        if (!trackingId || trackingId.trim() === '') {
+          return { valid: false, message: '請輸入追蹤號碼' };
+        }
+
+        if (trackingId.length < 3) {
+          return { valid: false, message: '追蹤號碼至少需要 3 個字元' };
+        }
+
+        return { valid: true, message: '' };
+      }
+
+      function showLoading() {
+        const resultsDiv = document.getElementById('results');
+        if (resultsDiv) {
+          resultsDiv.innerHTML = `
+            <div class="loading">
+              <div class="spinner"></div>
+              正在查詢中...
+            </div>
+          `;
+        }
+      }
+
+      function clearResults() {
+        const resultsDiv = document.getElementById('results');
+        if (resultsDiv) {
+          resultsDiv.innerHTML = '';
+        }
+      }
+
+      // 圖片模態框功能
+      function openImageModal(imageUrl, imageName) {
+        const modal = document.getElementById('imageModal');
+        const modalImage = document.getElementById('modalImage');
+        
+        if (modal && modalImage) {
+          modalImage.src = imageUrl;
+          modalImage.alt = imageName || '附件圖片';
+          modal.style.display = 'block';
+          
+          // 點擊背景關閉 modal
+          modal.onclick = function(e) {
+            if (e.target === modal) {
+              closeImageModal();
+            }
+          };
+        }
+      }
+
+      function closeImageModal() {
+        const modal = document.getElementById('imageModal');
+        if (modal) {
+          modal.style.display = 'none';
+        }
+      }
+
+      // 初始化頁面
+      function initializeTrackingPage() {
+        // 可以添加頁面初始化邏輯
+        console.log('貨運追蹤系統已載入');
+      }
+
+      // 頁面載入完成後初始化
+      document.addEventListener('DOMContentLoaded', initializeTrackingPage); 

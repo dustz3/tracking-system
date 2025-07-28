@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>貨運追蹤查詢</title>
+    <link rel="stylesheet" href="/src/styles/main.css">
+    <link rel="stylesheet" href="/src/styles/components.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚚 貨運追蹤查詢</h1>
+        </div>
+
+        <div class="search-section">
+            <div class="search-label">請輸入您的追蹤編號</div>
+            <div class="search-hint">輸入您的 Tracking ID 來查詢貨運狀態</div>
+            <input type="text" id="trackingInput" class="search-input" placeholder="例如：AK-24071009" onkeypress="handleKeyPress(event)">
+            <button onclick="searchTracking()" class="search-button">查詢</button>
+        </div>
+
+        <div id="message"></div>
+        <div id="results"></div>
+    </div>
+
+    <!-- 載入 JavaScript 模組 -->
+    <script src="/src/scripts/api.js"></script>
+    <script src="/src/scripts/utils.js"></script>
+    <script src="/src/scripts/tracking.js"></script>
+</body>
+</html> 

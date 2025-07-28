@@ -6,6 +6,14 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// 設定靜態檔案
+app.use(
+  '/assets',
+  express.static(path.join(__dirname, '..', 'dist', 'assets'))
+);
+app.use(express.json());
+app.use(cors());
+
 // 快取機制
 const cache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000; // 10分鐘快取
@@ -18,17 +26,110 @@ let requestStats = {
   startTime: new Date(),
 };
 
-// 中間件
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-
 // API Key 和 Base ID（從環境變數讀取）
 const API_KEY =
   process.env.AIRTABLE_API_KEY ||
   'patnJQd1eoNDR8yOF.98fd34bfb806a4dc8dbd68eb3b72598ef7cf5d7531ff2c29c163c304902ebf41';
 const BASE_ID = process.env.AIRTABLE_BASE_ID || 'appznhirfyiLbdpJJ';
 const TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || 'Shipments';
+
+// 關聯表格配置
+const RELATED_TABLES = {
+  所屬客戶: 'Customers', // 客戶表格名稱是 'Customers'
+  // 可以新增更多關聯表格
+  // '其他欄位': 'OtherTable',
+};
+
+// 解析關聯欄位的函數
+async function resolveRelatedFields(records) {
+  const resolvedRecords = [];
+
+  for (const record of records) {
+    const resolvedRecord = { ...record };
+    const fields = { ...record.fields };
+
+    // 處理每個可能的關聯欄位
+    for (const [fieldName, relatedTableName] of Object.entries(
+      RELATED_TABLES
+    )) {
+      console.log(`🔍 檢查關聯欄位: ${fieldName} -> ${relatedTableName}`);
+
+      if (fields[fieldName] && Array.isArray(fields[fieldName])) {
+        console.log(`📋 找到關聯記錄: ${fieldName} = ${fields[fieldName]}`);
+
+        try {
+          // 取得關聯記錄的詳細資料
+          const relatedRecordIds = fields[fieldName];
+          const relatedRecords = [];
+
+          for (const recordId of relatedRecordIds) {
+            console.log(`🔗 解析記錄 ID: ${recordId}`);
+
+            const relatedResponse = await fetch(
+              `https://api.airtable.com/v0/${BASE_ID}/${relatedTableName}/${recordId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+
+            if (relatedResponse.ok) {
+              const relatedData = await relatedResponse.json();
+              console.log(`✅ 取得關聯資料:`, relatedData.fields);
+
+              // 使用第一個可用的欄位作為顯示名稱（優先使用中文欄位）
+              const displayField =
+                relatedData.fields['公司名稱'] ||
+                relatedData.fields['客戶名稱'] ||
+                relatedData.fields.Name ||
+                relatedData.fields.Title ||
+                relatedData.fields['名稱'] ||
+                '未命名';
+
+              console.log(`🏷️ 顯示名稱: ${displayField}`);
+
+              relatedRecords.push({
+                id: recordId,
+                name: displayField,
+                fields: relatedData.fields,
+              });
+            } else {
+              console.error(
+                `❌ 無法取得關聯記錄 ${recordId}: ${relatedResponse.status}`
+              );
+            }
+          }
+
+          // 更新欄位值為解析後的名稱
+          if (relatedRecords.length === 1) {
+            fields[fieldName] = relatedRecords[0].name;
+            console.log(`✅ 更新欄位 ${fieldName}: ${relatedRecords[0].name}`);
+          } else if (relatedRecords.length > 1) {
+            fields[fieldName] = relatedRecords.map((r) => r.name).join(', ');
+            console.log(`✅ 更新欄位 ${fieldName}: ${fields[fieldName]}`);
+          }
+        } catch (error) {
+          console.error(`❌ 解析關聯欄位 ${fieldName} 時發生錯誤:`, error);
+          // 如果解析失敗，保持原始值
+        }
+      } else {
+        console.log(`⚠️ 欄位 ${fieldName} 不是陣列或不存在`);
+      }
+    }
+
+    resolvedRecord.fields = fields;
+    resolvedRecords.push(resolvedRecord);
+  }
+
+  return resolvedRecords;
+}
+
+// 中間件
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '..')));
 
 // 搜尋 Tracking ID 的 API 端點
 app.get('/api/search-tracking', async (req, res) => {
@@ -91,8 +192,11 @@ app.get('/api/search-tracking', async (req, res) => {
 
     const data = await response.json();
 
+    // 解析關聯欄位
+    const resolvedData = await resolveRelatedFields(data.records);
+
     // 在後端篩選 Tracking ID
-    const matchingRecords = data.records.filter((record) => {
+    const matchingRecords = resolvedData.filter((record) => {
       const fields = record.fields;
       return fields['Tracking ID'] === trackingId;
     });
@@ -184,7 +288,7 @@ app.get('/api/clear-cache', (req, res) => {
 
 // 首頁路由
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'customer-tracking-secure.html'));
+  res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
 // 啟動伺服器

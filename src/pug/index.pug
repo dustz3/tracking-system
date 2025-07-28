@@ -1,0 +1,32 @@
+doctype html
+html(lang="zh-TW")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport" content="width=device-width, initial-scale=1.0")
+    title 貨運追蹤查詢
+    link(rel="stylesheet" href="assets/css/main.css")
+    link(rel="stylesheet" href="assets/css/components.css")
+  
+  body
+    .container
+      .header
+        h1 🚚 貨運追蹤查詢
+      
+      .search-section
+        .search-label 請輸入您的追蹤編號
+        .search-hint 輸入您的 Tracking ID 來查詢貨運狀態
+        input#trackingInput.search-input(
+          type="text" 
+          placeholder="例如：AK-24071009" 
+          onkeypress="handleKeyPress(event)"
+        )
+        button.search-button(onclick="searchTracking()") 查詢
+        button.clear-button(onclick="clearAll()") 清除
+      
+      #message
+      #results
+    
+    // 載入 JavaScript 模組
+    script(src="assets/js/api.js")
+    script(src="assets/js/utils.js")
+    script(src="assets/js/tracking.js") 

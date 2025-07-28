@@ -1,0 +1,347 @@
+// 元件樣式
+
+// 搜尋區域
+.search-section
+  margin-bottom 30px
+
+.search-label
+  display flex
+  align-items center
+  justify-content center
+  margin-bottom 15px
+  font-size 1.2em
+  color #e0e0e0
+  
+  &::before
+    content '🔍'
+    margin-right 10px
+    font-size 1.5em
+
+.search-hint
+  font-size 0.9em
+  color #b0b0b0
+  margin-bottom 20px
+
+.search-input
+  width 100%
+  padding 15px 20px
+  border 2px solid #2a2a35
+  border-radius 10px
+  font-size 1.1em
+  margin-bottom 20px
+  transition border-color 0.3s ease
+  color #ffffff
+  background-color #2a2a35
+  
+  &::placeholder
+    color #888888
+  
+  &:focus
+    outline none
+    border-color #667eea
+    color #ffffff
+    background-color #2a2a35
+
+.search-button
+  background #143463
+  color white
+  margin-top 20px
+  padding 15px 30px
+  border none
+  border-radius 10px
+  font-size 1.1em
+  font-weight bold
+  cursor pointer
+  transition all 0.3s ease
+  width 100%
+  
+  &:hover
+    transform translateY(-2px)
+    box-shadow 0 10px 20px rgba(20, 52, 99, 0.4)
+
+.clear-button
+  background linear-gradient(45deg, #e74c3c, #c0392b)
+  color white
+  margin-top 10px
+  margin-bottom 10px
+  padding 15px 30px
+  border none
+  border-radius 10px
+  font-size 1.1em
+  font-weight bold
+  cursor pointer
+  transition all 0.3s ease
+  width 100%
+  
+  &:hover
+    transform translateY(-2px)
+    box-shadow 0 10px 20px rgba(231, 76, 60, 0.4)
+
+// 貨運卡片
+.shipment-card
+  background #2a2a35
+  border-radius 15px
+  padding 25px
+  margin-bottom 20px
+  box-shadow 0 10px 20px rgba(0, 0, 0, 0.2)
+
+// 附件樣式
+.attachment-item
+  margin 10px 0
+  display inline-block
+  margin-right 15px
+
+.attachment-image
+  width 100px
+  height 100px
+  object-fit cover
+  border-radius 8px
+  cursor pointer
+  transition transform 0.3s ease
+  border 2px solid #3a3a45
+  flex-shrink 0
+  
+  &:hover
+    transform scale(1.05)
+    border-color #667eea
+
+.attachment-link
+  display inline-block
+  padding 8px 15px
+  background #3a3a45
+  color #ffffff
+  text-decoration none
+  border-radius 5px
+  font-size 0.9em
+  transition background-color 0.3s ease
+  
+  &:hover
+    background #667eea
+
+// 圖片模態框
+.image-modal
+  display none
+  position fixed
+  top 0
+  left 0
+  width 100%
+  height 100%
+  z-index 1000
+
+.modal-overlay
+  position absolute
+  top 0
+  left 0
+  width 100%
+  height 100%
+  background rgba(0, 0, 0, 0.8)
+
+.modal-content
+  position absolute
+  top 50%
+  left 50%
+  transform translate(-50%, -50%)
+  background #2a2a35
+  border-radius 15px
+  padding 20px
+  max-width 90%
+  max-height 90%
+
+.modal-header
+  display flex
+  justify-content space-between
+  align-items center
+  margin-bottom 15px
+  
+  h3
+    color #ffffff
+    margin 0
+
+.modal-close
+  background none
+  border none
+  color #ffffff
+  font-size 1.5em
+  cursor pointer
+  padding 0
+  width 30px
+  height 30px
+  display flex
+  align-items center
+  justify-content center
+  
+  &:hover
+    color #667eea
+
+.modal-body
+  text-align center
+
+.modal-image
+  max-width 100%
+  max-height 70vh
+  border-radius 10px
+
+// 追蹤號碼
+.tracking-id
+  font-size 1.3em
+  font-weight bold
+  color #667eea
+  margin-bottom 15px
+  padding-bottom 10px
+  border-bottom 2px solid #3a3a45
+
+// 貨運詳情
+.shipment-details
+  display grid
+  grid-template-columns 1fr 1fr
+  gap 15px
+
+.detail-item
+  margin-bottom 10px
+  text-align left
+
+.detail-label
+  font-weight bold
+  color #b0b0b0
+  font-size 0.9em
+  margin-bottom 5px
+  text-align left
+
+.detail-value
+  color #ffffff
+  font-size 1em
+  word-break break-word
+  text-align left
+
+// 狀態樣式
+.status
+  padding 5px 12px
+  border-radius 20px
+  font-size 0.9em
+  font-weight bold
+  text-transform uppercase
+
+.status.shipped
+  background #4caf50
+  color white
+
+.status.in-transit
+  background #ff9800
+  color white
+
+.status.delivered
+  background #2196f3
+  color white
+
+.status.error
+  background #f44336
+  color white
+
+// 訊息樣式
+.message
+  padding 15px
+  border-radius 10px
+  margin-bottom 20px
+  font-weight bold
+
+.success
+  background #4caf50
+  color white
+
+.error
+  background #f44336
+  color white
+
+.info
+  background transparent
+  color #e0e0e0
+
+// 載入狀態
+.loading
+  text-align center
+  color #ffffff
+  font-size 1.1em
+
+.spinner
+  display inline-block
+  width 30px
+  height 30px
+  border 3px solid #3a3a45
+  border-top 3px solid #667eea
+  border-radius 50%
+  animation spin 1s linear infinite
+  margin-right 10px
+
+@keyframes spin
+  0%
+    transform rotate(0deg)
+  100%
+    transform rotate(360deg)
+
+// 無結果
+.no-result
+  text-align center
+  color #b0b0b0
+  padding 30px
+  
+  p
+    margin-bottom 10px
+
+// 圖片模態框樣式
+.image-modal
+  position fixed
+  top 0
+  left 0
+  width 100vw
+  height 100vh
+  background rgba(0, 0, 0, 0.4)
+  display flex
+  justify-content center
+  align-items center
+  z-index 9999
+
+.image-modal-content
+  position relative
+  max-width 90vw
+  max-height 90vh
+  background white
+  border-radius 10px
+  overflow hidden
+  box-shadow 0 20px 40px rgba(0, 0, 0, 0.3)
+
+.image-modal img
+  width 100%
+  height auto
+  display block
+
+.image-modal-close
+  position absolute
+  top 15px
+  right 20px
+  background rgba(0, 0, 0, 0.7)
+  color white
+  border none
+  border-radius 50%
+  width 40px
+  height 40px
+  font-size 24px
+  cursor pointer
+  display flex
+  align-items center
+  justify-content center
+  transition all 0.3s ease
+  
+  &:hover
+    background rgba(0, 0, 0, 0.9)
+    transform scale(1.1)
+
+// 響應式設計
+@media (max-width: 768px)
+  .shipment-details
+    grid-template-columns 1fr
+  
+  .search-input
+    font-size 1em
+  
+  .search-button
+    font-size 1em 
