@@ -3,8 +3,8 @@ const path = require('path');
 
 // 監控配置
 const MONITORING_CONFIG = {
-  // 健康檢查間隔 (毫秒)
-  healthCheckInterval: 5 * 60 * 1000, // 5分鐘
+  // 健康檢查間隔 (毫秒) - 改為10分鐘以減少頻率
+  healthCheckInterval: 10 * 60 * 1000, // 10分鐘
 
   // 報告生成間隔
   dailyReportTime: '08:00', // 每天早上8點
@@ -20,6 +20,14 @@ const MONITORING_CONFIG = {
 
   // 報告儲存路徑
   reportPath: './logs/reports',
+
+  // 記憶體管理配置
+  memoryManagement: {
+    maxAlerts: 50, // 最多保留50個警報
+    maxReports: 10, // 最多保留10個報告
+    maxRecentErrors: 20, // 最多保留20個最近錯誤
+    cleanupInterval: 30 * 60 * 1000, // 30分鐘清理一次
+  },
 };
 
 // 監控資料結構
@@ -57,6 +65,7 @@ class MonitoringSystem {
 
     this.alerts = [];
     this.reports = [];
+    this.lastReportCheck = new Date();
 
     // 確保報告目錄存在
     this.ensureReportDirectory();
@@ -70,6 +79,40 @@ class MonitoringSystem {
     if (!fs.existsSync(MONITORING_CONFIG.reportPath)) {
       fs.mkdirSync(MONITORING_CONFIG.reportPath, { recursive: true });
     }
+  }
+
+  // 記憶體清理機制
+  cleanupMemory() {
+    // 限制警報數量
+    if (this.alerts.length > MONITORING_CONFIG.memoryManagement.maxAlerts) {
+      this.alerts = this.alerts.slice(
+        -MONITORING_CONFIG.memoryManagement.maxAlerts
+      );
+    }
+
+    // 限制報告數量
+    if (this.reports.length > MONITORING_CONFIG.memoryManagement.maxReports) {
+      this.reports = this.reports.slice(
+        -MONITORING_CONFIG.memoryManagement.maxReports
+      );
+    }
+
+    // 限制最近錯誤數量
+    if (
+      this.metrics.errors.recent.length >
+      MONITORING_CONFIG.memoryManagement.maxRecentErrors
+    ) {
+      this.metrics.errors.recent = this.metrics.errors.recent.slice(
+        -MONITORING_CONFIG.memoryManagement.maxRecentErrors
+      );
+    }
+
+    // 強制垃圾回收（如果可用）
+    if (global.gc) {
+      global.gc();
+    }
+
+    console.log('🧹 記憶體清理完成');
   }
 
   // 記錄請求
@@ -110,15 +153,21 @@ class MonitoringSystem {
     }
     this.metrics.errors.byType[type]++;
 
-    // 保留最近10個錯誤
+    // 添加最近錯誤（限制數量）
     this.metrics.errors.recent.push({
-      timestamp: new Date(),
-      error: error.message || error,
+      timestamp: new Date().toISOString(),
       type: type,
+      message: error.message || error.toString(),
     });
 
-    if (this.metrics.errors.recent.length > 10) {
-      this.metrics.errors.recent.shift();
+    // 限制最近錯誤數量
+    if (
+      this.metrics.errors.recent.length >
+      MONITORING_CONFIG.memoryManagement.maxRecentErrors
+    ) {
+      this.metrics.errors.recent = this.metrics.errors.recent.slice(
+        -MONITORING_CONFIG.memoryManagement.maxRecentErrors
+      );
     }
   }
 
@@ -132,8 +181,8 @@ class MonitoringSystem {
     const startUsage = process.cpuUsage();
     setTimeout(() => {
       const endUsage = process.cpuUsage(startUsage);
-      this.metrics.system.cpuUsage =
-        (endUsage.user + endUsage.system) / 1000000;
+      const totalUsage = endUsage.user + endUsage.system;
+      this.metrics.system.cpuUsage = totalUsage / 1000000; // 轉換為秒
     }, 100);
   }
 
@@ -146,21 +195,36 @@ class MonitoringSystem {
 
   // 檢查警報
   checkAlerts() {
-    const errorRate =
-      this.metrics.requests.total > 0
-        ? this.metrics.requests.failed / this.metrics.requests.total
-        : 0;
-
     const alerts = [];
+    const now = new Date();
+
+    // 檢查記憶體使用率
+    if (
+      this.metrics.system.memoryUsage >
+      MONITORING_CONFIG.alertThresholds.memoryUsage
+    ) {
+      alerts.push({
+        type: 'memory_high',
+        message: `記憶體使用率過高: ${(
+          this.metrics.system.memoryUsage * 100
+        ).toFixed(1)}%`,
+        timestamp: now.toISOString(),
+        severity: 'warning',
+      });
+    }
 
     // 檢查錯誤率
-    if (errorRate > MONITORING_CONFIG.alertThresholds.errorRate) {
-      alerts.push({
-        type: 'ERROR_RATE_HIGH',
-        message: `錯誤率過高: ${(errorRate * 100).toFixed(2)}%`,
-        severity: 'HIGH',
-        timestamp: new Date(),
-      });
+    if (this.metrics.requests.total > 0) {
+      const errorRate =
+        this.metrics.requests.failed / this.metrics.requests.total;
+      if (errorRate > MONITORING_CONFIG.alertThresholds.errorRate) {
+        alerts.push({
+          type: 'error_rate_high',
+          message: `錯誤率過高: ${(errorRate * 100).toFixed(1)}%`,
+          timestamp: now.toISOString(),
+          severity: 'error',
+        });
+      }
     }
 
     // 檢查響應時間
@@ -169,42 +233,38 @@ class MonitoringSystem {
       MONITORING_CONFIG.alertThresholds.responseTime
     ) {
       alerts.push({
-        type: 'RESPONSE_TIME_SLOW',
+        type: 'response_time_slow',
         message: `平均響應時間過慢: ${this.metrics.performance.avgResponseTime.toFixed(
           0
         )}ms`,
-        severity: 'MEDIUM',
-        timestamp: new Date(),
+        timestamp: now.toISOString(),
+        severity: 'warning',
       });
     }
 
-    // 檢查記憶體使用率
-    if (
-      this.metrics.system.memoryUsage >
-      MONITORING_CONFIG.alertThresholds.memoryUsage
-    ) {
-      alerts.push({
-        type: 'MEMORY_USAGE_HIGH',
-        message: `記憶體使用率過高: ${(
-          this.metrics.system.memoryUsage * 100
-        ).toFixed(1)}%`,
-        severity: 'HIGH',
-        timestamp: new Date(),
-      });
+    // 添加新警報
+    this.alerts.push(...alerts);
+
+    // 限制警報數量
+    if (this.alerts.length > MONITORING_CONFIG.memoryManagement.maxAlerts) {
+      this.alerts = this.alerts.slice(
+        -MONITORING_CONFIG.memoryManagement.maxAlerts
+      );
     }
 
-    // 記錄新警報
+    // 記錄警報
     alerts.forEach((alert) => {
-      this.alerts.push(alert);
-      console.log(`🚨 警報: ${alert.message}`);
+      console.log(`🚨 ${alert.severity.toUpperCase()}: ${alert.message}`);
     });
   }
 
   // 生成日報
   generateDailyReport() {
+    this.updateSystemMetrics();
+
     const report = {
-      timestamp: new Date(),
-      type: 'DAILY_REPORT',
+      timestamp: new Date().toISOString(),
+      period: 'daily',
       summary: {
         uptime: this.formatUptime(this.metrics.system.uptime),
         totalRequests: this.metrics.requests.total,
@@ -214,10 +274,17 @@ class MonitoringSystem {
                 (this.metrics.requests.successful /
                   this.metrics.requests.total) *
                 100
-              ).toFixed(2) + '%'
+              ).toFixed(1) + '%'
             : '0%',
         avgResponseTime:
           this.metrics.performance.avgResponseTime.toFixed(0) + 'ms',
+        memoryUsage: (this.metrics.system.memoryUsage * 100).toFixed(1) + '%',
+      },
+      requests: {
+        total: this.metrics.requests.total,
+        successful: this.metrics.requests.successful,
+        failed: this.metrics.requests.failed,
+        cached: this.metrics.requests.cached,
         cacheHitRate:
           this.metrics.requests.total > 0
             ? (
@@ -252,8 +319,13 @@ class MonitoringSystem {
 
     fs.writeFileSync(filepath, JSON.stringify(report, null, 2));
 
-    // 記錄報告
+    // 記錄報告（限制數量）
     this.reports.push(report);
+    if (this.reports.length > MONITORING_CONFIG.memoryManagement.maxReports) {
+      this.reports = this.reports.slice(
+        -MONITORING_CONFIG.memoryManagement.maxReports
+      );
+    }
 
     console.log(`📊 日報已生成: ${filepath}`);
 
@@ -285,31 +357,46 @@ class MonitoringSystem {
 
   // 啟動監控
   startMonitoring() {
-    // 定期健康檢查
+    // 定期健康檢查（使用 setInterval 替代 setTimeout）
     setInterval(() => {
       this.updateSystemMetrics();
       this.checkAlerts();
     }, MONITORING_CONFIG.healthCheckInterval);
 
-    // 定期生成報告
-    this.scheduleReports();
+    // 定期記憶體清理
+    setInterval(() => {
+      this.cleanupMemory();
+    }, MONITORING_CONFIG.memoryManagement.cleanupInterval);
 
-    console.log('📊 監控系統已啟動');
+    // 定期檢查報告生成（每小時檢查一次）
+    setInterval(() => {
+      this.checkAndGenerateReports();
+    }, 60 * 60 * 1000); // 每小時
+
+    console.log('📊 監控系統已啟動（優化版）');
   }
 
-  // 排程報告生成
-  scheduleReports() {
+  // 檢查並生成報告
+  checkAndGenerateReports() {
     const now = new Date();
     const currentTime =
       now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
 
-    // 檢查是否到了報告時間
-    if (currentTime === MONITORING_CONFIG.dailyReportTime) {
-      this.generateDailyReport();
+    // 避免重複生成報告
+    const timeSinceLastCheck = now - this.lastReportCheck;
+    if (timeSinceLastCheck < 60 * 60 * 1000) {
+      // 至少間隔1小時
+      return;
     }
 
-    // 每分鐘檢查一次
-    setTimeout(() => this.scheduleReports(), 60 * 1000);
+    // 檢查是否到了報告時間
+    if (
+      currentTime === MONITORING_CONFIG.dailyReportTime ||
+      currentTime === MONITORING_CONFIG.eveningReportTime
+    ) {
+      this.generateDailyReport();
+      this.lastReportCheck = now;
+    }
   }
 }
 

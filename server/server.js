@@ -139,6 +139,7 @@ app.use(cors());
 // 快取機制
 const cache = new Map();
 const CACHE_DURATION = 10 * 60 * 1000; // 10分鐘快取
+const MAX_CACHE_SIZE = 100; // 最大快取項目數
 
 // 請求統計
 let requestStats = {
@@ -147,6 +148,41 @@ let requestStats = {
   apiRequests: 0,
   startTime: new Date(),
 };
+
+// 快取清理函數
+function cleanupCache() {
+  const now = Date.now();
+  let deletedCount = 0;
+
+  // 清理過期的快取項目
+  for (const [key, value] of cache.entries()) {
+    if (now - value.timestamp > CACHE_DURATION) {
+      cache.delete(key);
+      deletedCount++;
+    }
+  }
+
+  // 如果快取仍然太大，刪除最舊的項目
+  if (cache.size > MAX_CACHE_SIZE) {
+    const entries = Array.from(cache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    const toDelete = entries.slice(0, cache.size - MAX_CACHE_SIZE);
+    toDelete.forEach(([key]) => {
+      cache.delete(key);
+      deletedCount++;
+    });
+  }
+
+  if (deletedCount > 0) {
+    console.log(
+      `🧹 快取清理完成: 刪除 ${deletedCount} 個項目 (剩餘: ${cache.size})`
+    );
+  }
+}
+
+// 定期清理快取（每5分鐘）
+setInterval(cleanupCache, 5 * 60 * 1000);
 
 // API Key 和 Base ID（從環境變數讀取）
 const API_KEY =
