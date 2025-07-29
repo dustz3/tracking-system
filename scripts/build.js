@@ -189,36 +189,23 @@ function copyJavaScript() {
 
 // 複製服務器文件
 function copyServerFiles() {
-  console.log('🔄 複製服務器文件...');
-
-  const serverFiles = ['package.json'];
+  const serverFiles = [
+    'package.json',
+    'server.js',
+    'monitoring.js', // 新增監控模組
+  ];
 
   serverFiles.forEach((file) => {
-    const srcPath = path.join(__dirname, '..', file);
-    const destPath = path.join(distDir, file);
+    const sourcePath = path.join(__dirname, '..', 'server', file);
+    const destPath = path.join(__dirname, '..', 'dist', file);
 
-    if (fs.existsSync(srcPath)) {
-      try {
-        fs.copyFileSync(srcPath, destPath);
-        console.log(`✅ 複製完成: ${file}`);
-      } catch (error) {
-        console.error(`❌ 複製失敗: ${file}`, error.message);
-      }
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`✅ 複製完成: ${file}`);
+    } else {
+      console.log(`⚠️ 檔案不存在: ${file}`);
     }
   });
-
-  // 複製 server.js 從 server 目錄
-  const serverJsSrc = path.join(__dirname, '..', 'server', 'server.js');
-  const serverJsDest = path.join(distDir, 'server.js');
-
-  if (fs.existsSync(serverJsSrc)) {
-    try {
-      fs.copyFileSync(serverJsSrc, serverJsDest);
-      console.log(`✅ 複製完成: server.js`);
-    } catch (error) {
-      console.error(`❌ 複製失敗: server.js`, error.message);
-    }
-  }
 }
 
 // 主編譯函數

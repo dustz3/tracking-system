@@ -3,6 +3,9 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// 引入監控系統
+const monitoring = require('./monitoring');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -34,30 +37,28 @@ function rateLimitMiddleware(req, res, next) {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT.windowMs;
 
-  // 取得或初始化 IP 的請求記錄
+  // 清理過期的請求記錄
   if (!ipRequests.has(clientIP)) {
     ipRequests.set(clientIP, []);
   }
 
   const requests = ipRequests.get(clientIP);
-
-  // 清理過期的請求記錄
   const validRequests = requests.filter((time) => time > windowStart);
   ipRequests.set(clientIP, validRequests);
 
   // 檢查請求頻率
   if (validRequests.length >= RATE_LIMIT.maxRequests) {
     console.log(
-      `⚠️ 高頻率請求偵測: ${clientIP} (${validRequests.length} 次/分鐘)`
+      `🚫 IP ${clientIP} 超過請求限制，已封鎖 ${
+        RATE_LIMIT.blockDuration / 1000 / 60
+      } 分鐘`
     );
-
-    // 加入黑名單
     blockedIPs.add(clientIP);
 
     // 10分鐘後自動解除封鎖
     setTimeout(() => {
       blockedIPs.delete(clientIP);
-      console.log(`✅ IP 解除封鎖: ${clientIP}`);
+      console.log(`✅ IP ${clientIP} 已解除封鎖`);
     }, RATE_LIMIT.blockDuration);
 
     return res.status(429).json({
@@ -66,14 +67,14 @@ function rateLimitMiddleware(req, res, next) {
     });
   }
 
-  // 記錄這次請求
+  // 記錄請求
   validRequests.push(now);
   ipRequests.set(clientIP, validRequests);
 
   next();
 }
 
-// 定期清理過期的 IP 記錄（避免記憶體洩漏）
+// 定期清理過期的 IP 記錄
 setInterval(() => {
   const now = Date.now();
   const windowStart = now - RATE_LIMIT.windowMs;
@@ -88,7 +89,42 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // 每5分鐘清理一次
 
-// 套用防護中間件到所有 API 路由
+// 中間件
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// 請求監控中間件
+app.use((req, res, next) => {
+  const startTime = Date.now();
+
+  // 原始 send 方法
+  const originalSend = res.send;
+
+  // 重寫 send 方法來記錄響應時間
+  res.send = function (data) {
+    const responseTime = Date.now() - startTime;
+    const success = res.statusCode < 400;
+
+    // 記錄到監控系統
+    monitoring.recordRequest(success, responseTime);
+
+    // 更新安全指標
+    monitoring.updateSecurityMetrics(
+      blockedIPs.size,
+      ipRequests.size,
+      Array.from(ipRequests.values()).filter(
+        (requests) => requests.length > RATE_LIMIT.maxRequests
+      ).length
+    );
+
+    return originalSend.call(this, data);
+  };
+
+  next();
+});
+
+// 應用 Rate Limiting 到所有 API 端點
 app.use('/api', rateLimitMiddleware);
 
 // ===== 原有設定 =====
@@ -211,11 +247,6 @@ async function resolveRelatedFields(records) {
 
   return resolvedRecords;
 }
-
-// 中間件
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '..')));
 
 // 搜尋 Tracking ID 的 API 端點
 app.get('/api/search-tracking', async (req, res) => {
@@ -438,33 +469,95 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
-// 新增：防護監控端點（僅供管理員使用）
+// 新增：防護狀態端點
 app.get('/api/security-status', (req, res) => {
-  const blockedIPsList = Array.from(blockedIPs);
-  const activeIPsList = Array.from(ipRequests.entries()).map(
-    ([ip, requests]) => ({
-      ip,
-      requestCount: requests.length,
-      lastRequest: new Date(Math.max(...requests)).toISOString(),
-    })
-  );
-
   res.json({
-    blockedIPs: blockedIPsList,
-    activeIPs: activeIPsList,
+    blockedIPs: Array.from(blockedIPs),
+    activeIPs: Array.from(ipRequests.keys()),
     rateLimitConfig: RATE_LIMIT,
-    cacheSize: cache.size,
-    totalRequests: requestStats.totalRequests,
+    recentViolations: Array.from(ipRequests.entries())
+      .filter(([ip, requests]) => requests.length > RATE_LIMIT.maxRequests)
+      .map(([ip, requests]) => ({
+        ip: ip,
+        requestCount: requests.length,
+        lastRequest: new Date(Math.max(...requests)),
+      })),
   });
 });
 
-// 新增：清除快取的端點
+// 新增：系統監控狀態端點
+app.get('/api/monitoring/status', (req, res) => {
+  res.json(monitoring.getSystemStatus());
+});
+
+// 新增：手動生成報告端點
+app.get('/api/monitoring/generate-report', (req, res) => {
+  try {
+    const report = monitoring.generateDailyReport();
+    res.json({
+      success: true,
+      message: '報告已生成',
+      report: report,
+    });
+  } catch (error) {
+    monitoring.recordError(error, 'REPORT_GENERATION_ERROR');
+    res.status(500).json({
+      success: false,
+      error: '報告生成失敗',
+      message: error.message,
+    });
+  }
+});
+
+// 新增：監控儀表板端點
+app.get('/api/monitoring/dashboard', (req, res) => {
+  const status = monitoring.getSystemStatus();
+
+  res.json({
+    system: {
+      status: status.status,
+      uptime: status.uptime,
+      memoryUsage: status.memoryUsage,
+    },
+    performance: {
+      avgResponseTime: status.performance.avgResponseTime.toFixed(0) + 'ms',
+      maxResponseTime: status.performance.maxResponseTime.toFixed(0) + 'ms',
+      minResponseTime: status.performance.minResponseTime.toFixed(0) + 'ms',
+    },
+    requests: {
+      total: status.requests.total,
+      successRate:
+        status.requests.total > 0
+          ? (
+              (status.requests.successful / status.requests.total) *
+              100
+            ).toFixed(2) + '%'
+          : '0%',
+      cacheHitRate:
+        status.requests.total > 0
+          ? ((status.requests.cached / status.requests.total) * 100).toFixed(
+              1
+            ) + '%'
+          : '0%',
+    },
+    security: {
+      blockedIPs: status.security.blockedIPs,
+      suspiciousRequests: status.security.suspiciousRequests,
+      rateLimitViolations: status.security.rateLimitViolations,
+    },
+    alerts: status.recentAlerts,
+    errors: status.recentErrors,
+  });
+});
+
+// 新增：清除快取端點
 app.get('/api/clear-cache', (req, res) => {
   const cacheSize = cache.size;
   cache.clear();
+  console.log(`🗑️ 快取已清除 (原本大小: ${cacheSize})`);
   res.json({
-    message: `快取已清除 (原本有 ${cacheSize} 個項目)`,
-    cacheSize: 0,
+    success: true,
+    message: `快取已清除 (原本大小: ${cacheSize})`,
   });
 });
 
@@ -489,12 +582,20 @@ app.listen(PORT, () => {
     `   - IP 封鎖: 違規後封鎖 ${RATE_LIMIT.blockDuration / 1000 / 60} 分鐘`
   );
   console.log(`   - 輸入驗證: Tracking ID 格式檢查`);
+  console.log(`📊 監控系統已啟用:`);
+  console.log(`   - 自動健康檢查: 每5分鐘`);
+  console.log(`   - 自動報告生成: 每天早上8點`);
+  console.log(`   - 即時警報系統`);
   console.log(`📊 可用的 API 端點:`);
   console.log(`   - GET /api/search-tracking?trackingId=XXX`);
   console.log(`   - GET /api/test-connection`);
   console.log(`   - GET /api/stats (查看使用統計)`);
   console.log(`   - GET /api/security-status (防護狀態)`);
   console.log(`   - GET /api/clear-cache (清除快取)`);
+  console.log(`📈 監控 API 端點:`);
+  console.log(`   - GET /api/monitoring/status (系統狀態)`);
+  console.log(`   - GET /api/monitoring/dashboard (監控儀表板)`);
+  console.log(`   - GET /api/monitoring/generate-report (手動生成報告)`);
 });
 
 module.exports = app;
