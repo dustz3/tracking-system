@@ -6,6 +6,92 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ===== 防護機制 =====
+// IP 請求追蹤
+const ipRequests = new Map();
+const RATE_LIMIT = {
+  windowMs: 60 * 1000, // 1分鐘
+  maxRequests: 30, // 每分鐘最多30次請求
+  blockDuration: 10 * 60 * 1000, // 違規後封鎖10分鐘
+};
+
+// 可疑 IP 黑名單
+const blockedIPs = new Set();
+
+// 請求頻率檢查中間件
+function rateLimitMiddleware(req, res, next) {
+  const clientIP = req.ip || req.connection.remoteAddress;
+
+  // 檢查是否在黑名單中
+  if (blockedIPs.has(clientIP)) {
+    console.log(`🚫 封鎖的 IP 嘗試存取: ${clientIP}`);
+    return res.status(403).json({
+      error: 'Access denied',
+      message: 'Your IP has been blocked due to suspicious activity',
+    });
+  }
+
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT.windowMs;
+
+  // 取得或初始化 IP 的請求記錄
+  if (!ipRequests.has(clientIP)) {
+    ipRequests.set(clientIP, []);
+  }
+
+  const requests = ipRequests.get(clientIP);
+
+  // 清理過期的請求記錄
+  const validRequests = requests.filter((time) => time > windowStart);
+  ipRequests.set(clientIP, validRequests);
+
+  // 檢查請求頻率
+  if (validRequests.length >= RATE_LIMIT.maxRequests) {
+    console.log(
+      `⚠️ 高頻率請求偵測: ${clientIP} (${validRequests.length} 次/分鐘)`
+    );
+
+    // 加入黑名單
+    blockedIPs.add(clientIP);
+
+    // 10分鐘後自動解除封鎖
+    setTimeout(() => {
+      blockedIPs.delete(clientIP);
+      console.log(`✅ IP 解除封鎖: ${clientIP}`);
+    }, RATE_LIMIT.blockDuration);
+
+    return res.status(429).json({
+      error: 'Too many requests',
+      message: 'Rate limit exceeded. Please try again later.',
+    });
+  }
+
+  // 記錄這次請求
+  validRequests.push(now);
+  ipRequests.set(clientIP, validRequests);
+
+  next();
+}
+
+// 定期清理過期的 IP 記錄（避免記憶體洩漏）
+setInterval(() => {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT.windowMs;
+
+  for (const [ip, requests] of ipRequests.entries()) {
+    const validRequests = requests.filter((time) => time > windowStart);
+    if (validRequests.length === 0) {
+      ipRequests.delete(ip);
+    } else {
+      ipRequests.set(ip, validRequests);
+    }
+  }
+}, 5 * 60 * 1000); // 每5分鐘清理一次
+
+// 套用防護中間件到所有 API 路由
+app.use('/api', rateLimitMiddleware);
+
+// ===== 原有設定 =====
 // 設定靜態檔案
 app.use(
   '/assets',
@@ -135,13 +221,76 @@ app.use(express.static(path.join(__dirname, '..')));
 app.get('/api/search-tracking', async (req, res) => {
   try {
     const { trackingId } = req.query;
-    requestStats.totalRequests++;
+    const clientIP = req.ip || req.connection.remoteAddress;
 
+    // ===== 輸入驗證和防護 =====
     if (!trackingId) {
+      console.log(`❌ 缺少 Tracking ID: ${clientIP}`);
       return res.status(400).json({
         error: '請提供 Tracking ID',
       });
     }
+
+    // 檢查 Tracking ID 格式（防止暴力破解）
+    // 支援多種常見格式：
+    // - XX-YYYYMMDD (例如: TM-20250729)
+    // - XX-YYYYMMDD-XXX (例如: TM-20250729-001)
+    // - XX-YYYYMMDDXXX (例如: TM-20250729001)
+    // - 純數字格式 (例如: 123456789)
+    // - 字母數字混合 (例如: ABC123456)
+    const trackingIdPattern = /^[A-Z0-9\-]{3,20}$/;
+    if (!trackingIdPattern.test(trackingId)) {
+      console.log(
+        `⚠️ 可疑的 Tracking ID 格式: ${trackingId} (IP: ${clientIP})`
+      );
+      return res.status(400).json({
+        error: '無效的 Tracking ID 格式',
+        message: 'Tracking ID 應為 3-20 個字元的字母、數字或連字號組合',
+      });
+    }
+
+    // 檢查是否為明顯的測試或攻擊模式
+    const suspiciousPatterns = [
+      /^test/i, // 測試開頭
+      /^admin/i, // 管理員開頭
+      /^123+$/, // 純數字重複
+      /^abc+$/i, // 純字母重複
+      /^[0-9]{1,3}$/, // 太短的純數字
+      /^[a-z]{1,3}$/i, // 太短的純字母
+    ];
+
+    for (const pattern of suspiciousPatterns) {
+      if (pattern.test(trackingId)) {
+        console.log(
+          `🚫 可疑的 Tracking ID 模式: ${trackingId} (IP: ${clientIP})`
+        );
+        return res.status(400).json({
+          error: '無效的 Tracking ID',
+          message: 'Tracking ID 格式不符合要求',
+        });
+      }
+    }
+
+    // 檢查 Tracking ID 長度（防止過長輸入）
+    if (trackingId.length > 20) {
+      console.log(`🚫 過長的 Tracking ID: ${trackingId} (IP: ${clientIP})`);
+      return res.status(400).json({
+        error: 'Tracking ID 過長',
+      });
+    }
+
+    // 檢查是否包含可疑字元
+    const suspiciousChars = /[<>\"'&]/;
+    if (suspiciousChars.test(trackingId)) {
+      console.log(
+        `🚫 包含可疑字元的 Tracking ID: ${trackingId} (IP: ${clientIP})`
+      );
+      return res.status(400).json({
+        error: 'Tracking ID 包含無效字元',
+      });
+    }
+
+    requestStats.totalRequests++;
 
     // 檢查快取
     if (cache.has(trackingId)) {
@@ -173,18 +322,21 @@ app.get('/api/search-tracking', async (req, res) => {
     );
 
     if (response.status === 401) {
+      console.log(`❌ API Key 無效 (IP: ${clientIP})`);
       return res.status(401).json({
         error: 'API Key 無效',
       });
     }
 
     if (response.status === 403) {
+      console.log(`❌ 權限不足 (IP: ${clientIP})`);
       return res.status(403).json({
         error: '權限不足',
       });
     }
 
     if (!response.ok) {
+      console.log(`❌ Airtable API 錯誤: ${response.status} (IP: ${clientIP})`);
       return res.status(response.status).json({
         error: `Airtable API 錯誤: ${response.status} ${response.statusText}`,
       });
@@ -217,9 +369,9 @@ app.get('/api/search-tracking', async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    console.error('API 錯誤:', error);
+    console.error('❌ 搜尋 Tracking ID 時發生錯誤:', error);
     res.status(500).json({
-      error: '伺服器錯誤: ' + error.message,
+      error: '伺服器內部錯誤',
     });
   }
 });
@@ -273,6 +425,36 @@ app.get('/api/stats', (req, res) => {
             100
           ).toFixed(1) + '%'
         : '0%',
+    // 新增防護狀態
+    security: {
+      blockedIPs: blockedIPs.size,
+      activeIPs: ipRequests.size,
+      rateLimit: {
+        windowMs: RATE_LIMIT.windowMs / 1000 + '秒',
+        maxRequests: RATE_LIMIT.maxRequests + '次',
+        blockDuration: RATE_LIMIT.blockDuration / 1000 / 60 + '分鐘',
+      },
+    },
+  });
+});
+
+// 新增：防護監控端點（僅供管理員使用）
+app.get('/api/security-status', (req, res) => {
+  const blockedIPsList = Array.from(blockedIPs);
+  const activeIPsList = Array.from(ipRequests.entries()).map(
+    ([ip, requests]) => ({
+      ip,
+      requestCount: requests.length,
+      lastRequest: new Date(Math.max(...requests)).toISOString(),
+    })
+  );
+
+  res.json({
+    blockedIPs: blockedIPsList,
+    activeIPs: activeIPsList,
+    rateLimitConfig: RATE_LIMIT,
+    cacheSize: cache.size,
+    totalRequests: requestStats.totalRequests,
   });
 });
 
@@ -297,10 +479,21 @@ app.listen(PORT, () => {
   console.log(`📍 本地網址: http://localhost:${PORT}`);
   console.log(`🔒 API Key 已安全隱藏在後端`);
   console.log(`💾 快取機制已啟用 (10分鐘)`);
+  console.log(`🛡️ 防護機制已啟用:`);
+  console.log(
+    `   - Rate Limiting: ${RATE_LIMIT.maxRequests}次/${
+      RATE_LIMIT.windowMs / 1000
+    }秒`
+  );
+  console.log(
+    `   - IP 封鎖: 違規後封鎖 ${RATE_LIMIT.blockDuration / 1000 / 60} 分鐘`
+  );
+  console.log(`   - 輸入驗證: Tracking ID 格式檢查`);
   console.log(`📊 可用的 API 端點:`);
   console.log(`   - GET /api/search-tracking?trackingId=XXX`);
   console.log(`   - GET /api/test-connection`);
   console.log(`   - GET /api/stats (查看使用統計)`);
+  console.log(`   - GET /api/security-status (防護狀態)`);
   console.log(`   - GET /api/clear-cache (清除快取)`);
 });
 
