@@ -181,8 +181,8 @@ function cleanupCache() {
   }
 }
 
-// 定期清理快取（每5分鐘）
-setInterval(cleanupCache, 5 * 60 * 1000);
+// 定期清理快取（每30分鐘）
+setInterval(cleanupCache, 30 * 60 * 1000);
 
 // API Key 和 Base ID（從環境變數讀取）
 const API_KEY =

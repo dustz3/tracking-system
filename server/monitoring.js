@@ -3,8 +3,8 @@ const path = require('path');
 
 // 監控配置
 const MONITORING_CONFIG = {
-  // 健康檢查間隔 (毫秒) - 改為10分鐘以減少頻率
-  healthCheckInterval: 10 * 60 * 1000, // 10分鐘
+  // 健康檢查間隔 (毫秒) - 改為5小時以大幅減少頻率
+  healthCheckInterval: 5 * 60 * 60 * 1000, // 5小時
 
   // 報告生成間隔
   dailyReportTime: '08:00', // 每天早上8點
@@ -26,7 +26,7 @@ const MONITORING_CONFIG = {
     maxAlerts: 50, // 最多保留50個警報
     maxReports: 10, // 最多保留10個報告
     maxRecentErrors: 20, // 最多保留20個最近錯誤
-    cleanupInterval: 30 * 60 * 1000, // 30分鐘清理一次
+    cleanupInterval: 2 * 60 * 60 * 1000, // 2小時清理一次
   },
 };
 
